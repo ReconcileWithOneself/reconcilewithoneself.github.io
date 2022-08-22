@@ -1,10 +1,151 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>The Day After National Day</title>
+    <title>FRT快递计算器</title>
 </head>
 <body>
-<p>my html font test “” ""</p>
+<script>
+    // 0 Jita 运输点：Jita IV - Moon 4 - Caldari Navy Assembly Plant（吉他海四空间站）
+    // 1 RF-X7V 运输点：RF-X7V - forum.winterco.org（集结点星城）
+    // 2 维纳尔 N5Y 任务点：N5Y-4N - xingcheng（星城）
+    // 3 静寂谷集结点：H-EY0P - NOOB CORP（铁壁）
+    // 4 科尔斯 OSY-UD 运输点：OSY-UD IX - Moon 16 - Serpentis Corporation Chemical Storage（天蛇空间站）
+    // 5 特纳生产区 NCG-PW：NCG-PW - Seal of the North（星城）
+    // 6 血脉 BKG-Q2 北方集结点：BKG-Q2 - Trit Star (星城）
+    // 7 低安递送点 （临时）：Egbinger XI - Moon 3 - CBD Corporation Storage ,
+    // 8 低安递送点 （临时）：Podion VIII - Moon 15 - Nefantar Miner Association Mining Outpost （空间站）
+    // e.g.1 costArray[0][1]指的是从Jita到RF的每方快递运费
+    // e.g.2 costArray[0][7]为0表示从Jita到Egbinger的快递路线不可用
+    let costArray = [
+        //to:           Jita,   RF,  N5Y,  H-E,  OSY,  NCG,  BKG, Egbi, Podi
+        /*from Jita*/   [0, 1400, 1000, 500, 1300, 1400, 1400, 0, 0],
+        /*from RF*/     [1000, 0, 0, 0, 0, 0, 0, 0, 0],
+        /*from N5Y*/    [600, 0, 0, 0, 0, 600, 600, 0, 0],
+        /*from H-E*/    [200, 0, 0, 0, 0, 0, 0, 0, 0],
+        /*from OSY*/    [1000, 1600, 0, 0, 0, 0, 0, 0, 0],
+        /*from NCG*/    [1000, 0, 600, 0, 0, 0, 300, 0, 0],
+        /*from BKG*/    [1000, 0, 600, 0, 0, 300, 0, 0, 0],
+        /*from Egbin*/  [0, 1600, 0, 0, 0, 0, 0, 0, 0],
+        /*from Podion*/ [0, 2000, 0, 0, 0, 0, 0, 0, 0],
+    ];
+
+
+    let VOLUME_MAX = 340000;//快递最大体积
+    let ESTIMATED_PRICE_MAX = 5000000000;//快递最大保证金额
+
+    let startSelect;//起点选择控件
+    let destinationSelect;//终点选择控件
+
+    window.onload = function () {
+        startSelect = document.getElementById("start");//初始化
+        destinationSelect = document.getElementById("destination");//初始化
+        disableUnavailableDestination();//根据选择的起点禁用不支持的终点
+        startSelect.addEventListener("change", disableUnavailableDestination);//添加监听器：每当起点改变时，禁用不支持的终点
+    }
+
+    function calculate() {//计算运费并显示运费
+        let start = document.getElementById("start").selectedIndex;//起点空间站的索引
+        let destination = document.getElementById("destination").selectedIndex;//终点空间站的索引
+        let estimatedPriceInput = document.getElementById("price");//保证金（估价）文本框
+        let volumeInput = document.getElementById("volume");//体积文本框
+        let cost = costArray[start][destination] * volumeInput.value;//基于体积计算运费
+
+        if (volumeInput.value > VOLUME_MAX) {
+            volumeInput.value = removeLastChar(volumeInput.value);//订单体积太大时移除订单体积的最后一位数字
+            alert("超过单个订单体积上限（340000m3）！");
+            return;
+        } else if (estimatedPriceInput.value > ESTIMATED_PRICE_MAX) {
+            estimatedPriceInput.value = removeLastChar(estimatedPriceInput.value);//保证金太多时移除保证金的最后一位数字
+            alert("超过单个订单保证金上限（5b）！如果包含蓝图，请将蓝图另挂合同！");
+            return;
+        } else if (costArray[start][destination] === 0) {
+            alert("快递公司不支持当前路径，建议以Jita为起/终点进行快递！");
+            return;
+        }
+        //如果终点为Jita，添加百分比估价的运费
+        if (destination === 0) {
+            cost += 0.02 * estimatedPriceInput.value;
+        }
+        //运费不得少于5m
+        if (cost < 5000000) {
+            cost = 5000000;
+        }
+        //给运费添加千位分隔符并输出
+        document.getElementById("cost").value = formatCost(cost);
+    }
+
+    //根据起点空间站禁用不可用的终点空间站
+    function disableUnavailableDestination() {
+        // console.log("startSelect=" + startSelect.value + "," + "destinationSelect=" + destinationSelect.value);
+        for (let i = 0; i < destinationSelect.options.length; i++) {
+            destinationSelect.options[i].disabled = (costArray[startSelect.selectedIndex][i] === 0);//如果不可用（运费为0），则禁用该空间站
+        }
+
+        //使终点选择控件选中第一个可用的终点空间站
+        let firstAvailableIndex;
+        for (firstAvailableIndex = 0; firstAvailableIndex < destinationSelect.options.length; firstAvailableIndex++) {
+            if (costArray[startSelect.selectedIndex][firstAvailableIndex] !== 0) {
+                break;
+            }
+        }
+        destinationSelect.selectedIndex = firstAvailableIndex;
+    }
+
+    //格式化数字，添加千位分隔符
+    function formatCost(num) {
+        return (num.toString().indexOf('.') !== -1) ? num.toLocaleString() : num.toString().replace(/(\d)(?=(?:\d{3})+$)/g, '$1,');
+    }
+
+    //移除字符串最后一位
+    function removeLastChar(string) {
+        if (string) {
+            string = string.toString();
+            return string.substring(0, string.length - 1);
+        } else {
+            return "";
+        }
+    }
+
+</script>
+<label for="start">
+    起点：
+    <select id="start">
+        <option value="0">Jita 运输点：Jita IV - Moon 4 - Caldari Navy Assembly Plant（吉他海四空间站）</option>
+        <option value="1">RF-X7V 运输点：RF-X7V - forum.winterco.org（集结点星城）</option>
+        <option value="2">维纳尔 N5Y 任务点：N5Y-4N - xingcheng（星城）</option>
+        <option value="3">静寂谷集结点：H-EY0P - NOOB CORP（铁壁）</option>
+        <option value="4">科尔斯 OSY-UD 运输点：OSY-UD IX - Moon 16 - Serpentis Corporation Chemical Storage（天蛇空间站）</option>
+        <option value="5">特纳生产区 NCG-PW：NCG-PW - Seal of the North（星城）</option>
+        <option value="6">血脉 BKG-Q2 北方集结点：BKG-Q2 - Trit Star (星城）</option>
+        <option value="7">低安递送点 （临时）：Egbinger XI - Moon 3 - CBD Corporation Storage</option>
+        <option value="8">低安递送点 （临时）：Podion VIII - Moon 15 - Nefantar Miner Association Mining Outpost （空间站）</option>
+    </select><br>
+    终点：
+    <select id="destination">
+        <option value="0">Jita 运输点：Jita IV - Moon 4 - Caldari Navy Assembly Plant（吉他海四空间站）</option>
+        <option value="1">RF-X7V 运输点：RF-X7V - forum.winterco.org（集结点星城）</option>
+        <option value="2">维纳尔 N5Y 任务点：N5Y-4N - xingcheng（星城）</option>
+        <option value="3">静寂谷集结点：H-EY0P - NOOB CORP（铁壁）</option>
+        <option value="4">科尔斯 OSY-UD 运输点：OSY-UD IX - Moon 16 - Serpentis Corporation Chemical Storage（天蛇空间站）</option>
+        <option value="5">特纳生产区 NCG-PW：NCG-PW - Seal of the North（星城）</option>
+        <option value="6">血脉 BKG-Q2 北方集结点：BKG-Q2 - Trit Star (星城）</option>
+        <option value="7">低安递送点 （临时）：Egbinger XI - Moon 3 - CBD Corporation Storage</option>
+        <option value="8">低安递送点 （临时）：Podion VIII - Moon 15 - Nefantar Miner Association Mining Outpost （空间站）</option>
+    </select><br>
+
+    估价（起点为Jita则填0）：<input type="text" id="price" value="0" oninput="calculate()"/><br>
+    体积：<input type="text" id="volume" value="0" oninput="calculate()"/><br>
+    <button onclick="calculate()">计算</button><br>
+</label>
+
+<label>
+    快递公司名：<input value="S.F Express" readonly="readonly"/><br>
+    运费：<input id="cost"/><br>
+    期满：<input value="2 weeks" readonly="readonly"/><br>
+    预计完成时间：<input value="7 days" readonly="readonly"/><br>
+    体积上限：<input value="340,000m3" readonly="readonly"/><br>
+</label>
+
 </body>
 </html>
